@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
-use skrifa::{outline::ExportedHintPlan, raw::TableProvider, GlyphId};
+use skrifa::{outline::autohint::GlyphStyle, raw::TableProvider, GlyphId};
 use write_fonts::{tables::gvar::Tent, types::F2Dot14};
 
-use crate::{font::Font, style::StyleIndex, AutohintError};
+use crate::{font::Font, glyf::ExportedHintPlan, AutohintError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SegmentSig {
@@ -329,9 +329,7 @@ fn hint_plan_divergence_details(base: &HintPlanSignature, other: &HintPlanSignat
 pub(crate) fn has_stable_hint_plan_across_variations(
     font: &Font,
     glyph_idx: GlyphId,
-    ta_style: StyleIndex,
-    is_non_base: bool,
-    is_digit: bool,
+    glyph_style: GlyphStyle,
 ) -> Result<bool, AutohintError> {
     let locations = glyph_variations(font, glyph_idx)?;
     if locations.is_empty() {
@@ -339,27 +337,13 @@ pub(crate) fn has_stable_hint_plan_across_variations(
     }
 
     for size in font.args.hinting_range_min..=font.args.hinting_range_max {
-        let default_plan = crate::glyf::compute_hint_plan(
-            font,
-            glyph_idx,
-            ta_style.as_usize(),
-            is_non_base as u8,
-            is_digit as u8,
-            size as u16,
-            &[],
-        )?;
+        let default_plan =
+            crate::glyf::compute_hint_plan(font, glyph_idx, glyph_style, size as u16, &[])?;
         let default_sig = hint_plan_signature(&default_plan);
 
         for coords in &locations {
-            let var_plan = crate::glyf::compute_hint_plan(
-                font,
-                glyph_idx,
-                ta_style.as_usize(),
-                is_non_base as u8,
-                is_digit as u8,
-                size as u16,
-                coords,
-            )?;
+            let var_plan =
+                crate::glyf::compute_hint_plan(font, glyph_idx, glyph_style, size as u16, coords)?;
             let var_sig = hint_plan_signature(&var_plan);
             let metrics = hint_plan_divergence_metrics(&default_sig, &var_sig);
             if metrics.total_score() != 0 {

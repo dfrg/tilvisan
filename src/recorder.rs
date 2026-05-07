@@ -1,19 +1,19 @@
 use std::collections::BTreeSet;
 
-use skrifa::GlyphId;
+use skrifa::{outline::autohint::GlyphStyle, GlyphId};
 
 use crate::{
     bytecode::Bytecode,
     control::CONTROL_DELTA_PPEM_MIN,
     control_index::ControlIndex,
     font::Font,
-    glyf::{extract_unscaled_outline, ScaledGlyph},
+    glyf::{extract_unscaled_outline, ExportedHintPlan, ExportedHintRecord, ScaledGlyph},
     loader::{build_subglyph_shifter_bytecode, LoaderGlyphInfo, LoaderGlyphKind},
     opcodes::*,
+    style::STYLE_INDEX_UNASSIGNED,
     variations::has_stable_hint_plan_across_variations,
     AutohintError,
 };
-use skrifa::outline::{ExportedHintPlan, ExportedHintRecord};
 use write_fonts::types::F2Dot14;
 
 use crate::style::{StyleIndex, STYLE_COUNT};
@@ -1154,8 +1154,7 @@ fn recorder_record_hints_for_ppem(
     glyph_num_points: u32,
     ppem: u16,
     ta_style: StyleIndex,
-    is_non_base: bool,
-    is_digit: bool,
+    style: GlyphStyle,
     coords: &[F2Dot14],
 ) -> Result<(), AutohintError> {
     // Reset the hints-record accumulator for this ppem
@@ -1165,15 +1164,7 @@ fn recorder_record_hints_for_ppem(
         recorder.hints_record_num_actions = 0;
     }
 
-    let rust_plan = crate::glyf::compute_hint_plan(
-        font,
-        glyph_idx,
-        ta_style.as_usize(),
-        is_non_base as u8,
-        is_digit as u8,
-        ppem,
-        coords,
-    )?;
+    let rust_plan = crate::glyf::compute_hint_plan(font, glyph_idx, style, ppem, coords)?;
 
     if !recorder_build_replay_axis_from_plan(recorder, &rust_plan) {
         return Err(AutohintError::OutOfMemory);
@@ -1506,8 +1497,7 @@ fn append_hints_or_scaler_bytecode(
     idx: GlyphId,
     glyph_num_points: u32,
     ta_style: StyleIndex,
-    is_non_base: bool,
-    is_digit: bool,
+    glyph_style: GlyphStyle,
     bytecode: &mut Bytecode,
 ) -> Result<bool, AutohintError> {
     let mut recorder = RustRecorder::new(glyph_ref);
@@ -1528,8 +1518,7 @@ fn append_hints_or_scaler_bytecode(
             glyph_num_points,
             size as u16,
             ta_style,
-            is_non_base,
-            is_digit,
+            glyph_style,
             &[],
         )?;
 
@@ -1680,7 +1669,8 @@ pub(crate) fn build_glyph_instructions(font: &mut Font, idx: GlyphId) -> Result<
         log_debug_heading(&format!("glyph {}", idx), '=');
     }
 
-    let ta_style = StyleIndex::new(gstyle.style_index as usize)?;
+    let ta_style =
+        StyleIndex::new(gstyle.style_index().unwrap_or(STYLE_INDEX_UNASSIGNED) as usize)?;
     let use_gstyle_data;
 
     let (is_composite_glyph, is_empty_glyph, glyph_num_points) =
@@ -1704,13 +1694,7 @@ pub(crate) fn build_glyph_instructions(font: &mut Font, idx: GlyphId) -> Result<
     }
 
     let mut unstable_variable_plan = if font.is_variable() && !is_composite_glyph {
-        !has_stable_hint_plan_across_variations(
-            font,
-            idx,
-            ta_style,
-            gstyle.is_non_base,
-            gstyle.is_digit,
-        )?
+        !has_stable_hint_plan_across_variations(font, idx, gstyle)?
     } else {
         false
     };
@@ -1763,8 +1747,7 @@ pub(crate) fn build_glyph_instructions(font: &mut Font, idx: GlyphId) -> Result<
             idx,
             glyph_num_points,
             ta_style,
-            gstyle.is_non_base,
-            gstyle.is_digit,
+            gstyle,
             &mut bytecode,
         )?;
     }
@@ -1777,7 +1760,7 @@ pub(crate) fn build_glyph_instructions(font: &mut Font, idx: GlyphId) -> Result<
         bytecode.extend(emitted);
     }
 
-    if use_gstyle_data && gstyle.is_non_base {
+    if use_gstyle_data && gstyle.is_non_base() {
         glyph_ref.append_ignore_std_width();
         bytecode.extend_bytes(&[PUSHB_2, CvtLocations::cvtl_ignore_std_width as u8, 0, WCVTP]);
     }
