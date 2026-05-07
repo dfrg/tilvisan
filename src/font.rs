@@ -1,5 +1,7 @@
 use indexmap::IndexMap;
-use skrifa::{FontRef, GlyphId, GlyphNames, Tag, outline::autohint::GlyphStyle, raw::TableProvider};
+use skrifa::{
+    outline::autohint::GlyphStyle, raw::TableProvider, FontRef, GlyphId, GlyphNames, Tag,
+};
 use write_fonts::{
     from_obj::ToOwnedTable as _,
     tables::{

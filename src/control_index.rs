@@ -1,4 +1,4 @@
-use skrifa::{GlyphId, outline::autohint::GlyphStyle};
+use skrifa::{outline::autohint::GlyphStyle, GlyphId};
 
 use crate::{font::Font, intset::IntSet, AutohintError};
 use std::collections::{BTreeMap, HashMap};
