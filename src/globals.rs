@@ -183,7 +183,7 @@ pub(crate) fn compute_style_coverage(
         let is_digit = style.is_digit();
 
         if let Some(skrifa_style) = style.style_index() {
-            style_index = skrifa_style as u16;
+            style_index = skrifa_style;
             sample_glyphs_map
                 .entry(StyleIndex::new(skrifa_style as usize)?)
                 .or_insert(GlyphId::new(gid as u32));
