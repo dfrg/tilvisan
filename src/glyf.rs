@@ -786,7 +786,7 @@ pub struct ExportedHintRecord {
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
 pub struct ExportedHintSegment {
-    pub flags: u8,
+    pub flags: TopoFlags,
     pub dir: i8,
     pub pos: i16,
     pub delta: i16,
@@ -806,7 +806,7 @@ pub struct ExportedHintSegment {
 impl ExportedHintSegment {
     fn from_skrifa(segment: &skrifa::outline::autohint::Segment) -> Self {
         Self {
-            flags: segment.flags().to_bits(),
+            flags: segment.flags(),
             dir: segment.direction() as i8,
             pos: segment.position(),
             delta: segment.delta(),
@@ -830,7 +830,7 @@ pub struct ExportedHintEdge {
     pub fpos: i16,
     pub opos: i32,
     pub pos: i32,
-    pub flags: u8,
+    pub flags: TopoFlags,
     pub dir: i8,
     pub link_ix: u16,
     pub serif_ix: u16,
@@ -860,7 +860,7 @@ impl ExportedHintEdge {
             fpos: edge.original_position(),
             opos: edge.scaled_position(),
             pos: edge.position(),
-            flags: edge.flags().to_bits(),
+            flags: edge.flags(),
             dir: edge.direction() as i8,
             link_ix: edge.link_index().unwrap_or(u16::MAX),
             serif_ix: edge.serif_index().unwrap_or(u16::MAX),

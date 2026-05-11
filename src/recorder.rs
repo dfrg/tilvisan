@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use skrifa::{
-    outline::autohint::{Dimension, EdgeAction, GlyphStyle, PointAction},
+    outline::autohint::{Dimension, EdgeAction, GlyphStyle, PointAction, TopoFlags},
     GlyphId,
 };
 
@@ -108,7 +108,7 @@ struct RustRecorder<'a> {
     replay_segment_edge_raw: Vec<u16>,
     replay_edge_first_raw: Vec<u16>,
     replay_edge_serif_raw: Vec<u16>,
-    replay_edge_flags: Vec<u8>,
+    replay_edge_flags: Vec<TopoFlags>,
     replay_edge_best_blue_idx: Vec<u16>,
     replay_edge_best_blue_is_shoot: Vec<bool>,
     wrap_around_segments: Vec<u16>,
@@ -412,7 +412,7 @@ impl<'a> RustRecorder<'a> {
         count
     }
 
-    fn edge_flags_by_idx(&self, edge_idx: u16) -> Option<u8> {
+    fn edge_flags_by_idx(&self, edge_idx: u16) -> Option<TopoFlags> {
         self.replay_edge_flags.get(edge_idx as usize).copied()
     }
 
@@ -759,9 +759,6 @@ fn marshal_action_fields(
     cvt_blue_refs_offset: u16,
     cvt_blue_shoots_offset: u16,
 ) -> Option<RecorderMarshaledAction> {
-    const TA_EDGE_ROUND: u8 = 1 << 0;
-    const TA_EDGE_SERIF: u8 = 1 << 1;
-
     let mut m = RecorderMarshaledAction::default();
 
     let maybe_bound_first_idx = |edge_idx: u16| -> u16 {
@@ -779,8 +776,8 @@ fn marshal_action_fields(
 
             m.edge1_first_idx = recorder.edge_first_mapped_segment_index(arg1_edge_idx);
             m.edge2_first_idx = recorder.edge_first_mapped_segment_index(arg2_edge_idx);
-            m.primary_is_round = (base_flags & TA_EDGE_ROUND) != 0;
-            m.secondary_is_serif = (stem_flags & TA_EDGE_SERIF) != 0;
+            m.primary_is_round = base_flags.contains(TopoFlags::ROUND);
+            m.secondary_is_serif = stem_flags.contains(TopoFlags::SERIF);
             m.segment_edge_indices[0] = arg2_edge_idx;
             m.num_segment_edges = 1;
         }
@@ -791,8 +788,8 @@ fn marshal_action_fields(
 
             m.edge1_first_idx = recorder.edge_first_mapped_segment_index(arg1_edge_idx);
             m.edge2_first_idx = recorder.edge_first_mapped_segment_index(arg2_edge_idx);
-            m.primary_is_round = (edge_flags & TA_EDGE_ROUND) != 0;
-            m.secondary_is_serif = (edge2_flags & TA_EDGE_SERIF) != 0;
+            m.primary_is_round = edge_flags.contains(TopoFlags::ROUND);
+            m.secondary_is_serif = edge2_flags.contains(TopoFlags::SERIF);
             m.segment_edge_indices[0] = arg1_edge_idx;
             m.num_segment_edges = 1;
         }
@@ -804,8 +801,8 @@ fn marshal_action_fields(
             m.edge1_first_idx = recorder.edge_first_mapped_segment_index(arg1_edge_idx);
             m.edge2_first_idx = recorder.edge_first_mapped_segment_index(arg2_edge_idx);
             m.edge3_first_idx = maybe_bound_first_idx(lower_bound_edge_idx);
-            m.primary_is_round = (edge_flags & TA_EDGE_ROUND) != 0;
-            m.secondary_is_serif = (edge2_flags & TA_EDGE_SERIF) != 0;
+            m.primary_is_round = edge_flags.contains(TopoFlags::ROUND);
+            m.secondary_is_serif = edge2_flags.contains(TopoFlags::SERIF);
             m.segment_edge_indices[0] = arg1_edge_idx;
             m.num_segment_edges = 1;
         }
@@ -830,8 +827,8 @@ fn marshal_action_fields(
             m.edge1_first_idx = recorder.edge_first_mapped_segment_index(arg1_edge_idx);
             m.edge2_first_idx = recorder.edge_first_mapped_segment_index(arg2_edge_idx);
             m.edge3_first_idx = maybe_bound_first_idx(lower_bound_edge_idx);
-            m.primary_is_round = (edge_flags & TA_EDGE_ROUND) != 0;
-            m.secondary_is_serif = (edge2_flags & TA_EDGE_SERIF) != 0;
+            m.primary_is_round = edge_flags.contains(TopoFlags::ROUND);
+            m.secondary_is_serif = edge2_flags.contains(TopoFlags::SERIF);
             m.segment_edge_indices[0] = arg1_edge_idx;
             m.segment_edge_indices[1] = arg2_edge_idx;
             m.num_segment_edges = 2;

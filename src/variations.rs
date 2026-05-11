@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use skrifa::{
-    outline::autohint::{Dimension, GlyphStyle, PointAction},
+    outline::autohint::{Dimension, GlyphStyle, PointAction, TopoFlags},
     raw::TableProvider,
     GlyphId,
 };
@@ -26,7 +26,7 @@ struct EdgeSig {
     first_ix: u16,
     serif_ix: u16,
     blue_ix: u16,
-    flags: u8,
+    flags: TopoFlags,
     blue_is_shoot: bool,
 }
 
@@ -99,9 +99,8 @@ impl HintPlanDivergenceMetrics {
     }
 }
 
-fn round_bit(flags: u8) -> bool {
-    const TA_EDGE_ROUND: u8 = 1 << 0;
-    (flags & TA_EDGE_ROUND) != 0
+fn round_bit(flags: TopoFlags) -> bool {
+    flags.contains(TopoFlags::ROUND)
 }
 
 fn is_point_ip_action(action: Action) -> bool {
@@ -146,7 +145,7 @@ fn hint_plan_signature(plan: &ExportedHintPlan) -> HintPlanSignature {
         let edge = &plan.edges[idx];
         (
             remap_idx(edge.first_ix, &segment_map),
-            edge.flags,
+            edge.flags.to_bits(),
             edge.blue_ix,
             edge.blue_is_shoot != 0,
             edge.serif_ix,
@@ -293,7 +292,7 @@ fn hint_plan_divergence_details(base: &HintPlanSignature, other: &HintPlanSignat
     for (idx, (base_edge, other_edge)) in base.edges.iter().zip(other.edges.iter()).enumerate() {
         if base_edge != other_edge {
             details.push_str(&format!(
-                "\n  Edge {}: base={{first_ix:{}, flags:{}, blue_ix:{}}} vs other={{first_ix:{}, flags:{}, blue_ix:{}}}",
+                "\n  Edge {}: base={{first_ix:{}, flags:{:?}, blue_ix:{}}} vs other={{first_ix:{}, flags:{:?}, blue_ix:{}}}",
                 idx,
                 base_edge.first_ix,
                 base_edge.flags,
