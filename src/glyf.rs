@@ -13,7 +13,7 @@ use crate::{
 use indexmap::IndexMap;
 use skrifa::{
     outline::{
-        autohint::{GlyphStyle, STYLE_CLASSES},
+        autohint::{Dimension, EdgeAction, GlyphStyle, PointAction, TopoFlags, STYLE_CLASSES},
         SmoothMode,
     },
     prelude::*,
@@ -772,10 +772,10 @@ fn build_glyphs(
     })
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct ExportedHintRecord {
-    pub action: u8,
-    pub dim: u8,
+    pub action: Action,
+    pub dim: Dimension,
     pub point_ix: u16,
     pub edge_ix: u16,
     pub edge2_ix: u16,
@@ -883,6 +883,49 @@ pub struct ExportedHintPlan {
     pub edges: Vec<ExportedHintEdge>,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Action {
+    Edge(EdgeAction),
+    Point(PointAction),
+}
+
+impl Action {
+    pub(crate) fn to_opcode(self) -> u8 {
+        const TA_BLUE: u8 = 4;
+        const TA_BLUE_ANCHOR: u8 = 5;
+        const TA_ANCHOR: u8 = 6;
+        const TA_ADJUST: u8 = 10;
+        const TA_LINK: u8 = 22;
+        const TA_STEM: u8 = 26;
+        const TA_SERIF: u8 = 38;
+        const TA_SERIF_ANCHOR: u8 = 45;
+        const TA_SERIF_LINK1: u8 = 52;
+        const TA_SERIF_LINK2: u8 = 59;
+        const TA_BOUND: u8 = 66;
+        match self {
+            Action::Edge(ea) => match ea {
+                EdgeAction::Adjust => TA_ADJUST,
+                EdgeAction::Blue => TA_BLUE,
+                EdgeAction::BlueAnchor => TA_BLUE_ANCHOR,
+                EdgeAction::Link => TA_LINK,
+                EdgeAction::Serif => TA_SERIF,
+                EdgeAction::SerifAnchor => TA_SERIF_ANCHOR,
+                EdgeAction::SerifLink1 => TA_SERIF_LINK1,
+                EdgeAction::SerifLink2 => TA_SERIF_LINK2,
+                EdgeAction::Anchor => TA_ANCHOR,
+                EdgeAction::Stem => TA_STEM,
+                EdgeAction::Bound => TA_BOUND,
+            },
+            Action::Point(pa) => match pa {
+                PointAction::IpBefore => 0,
+                PointAction::IpAfter => 1,
+                PointAction::IpOn => 2,
+                PointAction::IpBetween => 3,
+            },
+        }
+    }
+}
+
 impl ExportedHintPlan {
     fn from_skrifa(skrifa_plan: &skrifa::outline::autohint::HintPlan) -> Self {
         let mut plan = Self::default();
@@ -901,21 +944,15 @@ impl ExportedHintPlan {
             );
         }
         for action in skrifa_plan.actions() {
-            use skrifa::outline::autohint::{Dimension, EdgeAction, HintAction, PointAction};
+            use skrifa::outline::autohint::{Dimension, HintAction};
             match action {
                 HintAction::Point(point) => {
                     if point.dimension == Dimension::Horizontal {
                         continue;
                     }
-                    let action = match point.action {
-                        PointAction::IpBefore => 0,  // ta_ip_before
-                        PointAction::IpAfter => 1,   // ta_ip_after
-                        PointAction::IpOn => 2,      // ta_ip_on
-                        PointAction::IpBetween => 3, // ta_ip_between
-                    };
                     plan.records.push(ExportedHintRecord {
-                        action,
-                        dim: point.dimension as u8,
+                        action: Action::Point(point.action),
+                        dim: point.dimension,
                         point_ix: point.point_index,
                         edge_ix: point.edge_index.unwrap_or(u16::MAX),
                         edge2_ix: point.edge2_index.unwrap_or(u16::MAX),
@@ -928,22 +965,9 @@ impl ExportedHintPlan {
                     if edge.dimension == Dimension::Horizontal {
                         continue;
                     }
-                    let action = match edge.action {
-                        EdgeAction::Blue => 4,         // ta_blue
-                        EdgeAction::BlueAnchor => 5,   // ta_blue_anchor
-                        EdgeAction::Anchor => 6,       // ta_anchor
-                        EdgeAction::Adjust => 10,      // ta_adjust
-                        EdgeAction::Link => 22,        // ta_link
-                        EdgeAction::Stem => 26,        // ta_stem
-                        EdgeAction::Serif => 38,       // ta_serif
-                        EdgeAction::SerifAnchor => 45, // ta_serif_anchor
-                        EdgeAction::SerifLink1 => 52,  // ta_serif_link1
-                        EdgeAction::SerifLink2 => 59,  // ta_serif_link2
-                        EdgeAction::Bound => 66,       // ta_bound
-                    };
                     plan.records.push(ExportedHintRecord {
-                        action,
-                        dim: edge.dimension as u8,
+                        action: Action::Edge(edge.action),
+                        dim: edge.dimension,
                         point_ix: u16::MAX,
                         edge_ix: edge.edge_index,
                         edge2_ix: edge.edge2_index.unwrap_or(u16::MAX),

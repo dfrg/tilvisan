@@ -1,9 +1,17 @@
 use std::collections::HashSet;
 
-use skrifa::{outline::autohint::GlyphStyle, raw::TableProvider, GlyphId};
+use skrifa::{
+    outline::autohint::{Dimension, GlyphStyle, PointAction},
+    raw::TableProvider,
+    GlyphId,
+};
 use write_fonts::{tables::gvar::Tent, types::F2Dot14};
 
-use crate::{font::Font, glyf::ExportedHintPlan, AutohintError};
+use crate::{
+    font::Font,
+    glyf::{Action, ExportedHintPlan},
+    AutohintError,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SegmentSig {
@@ -24,8 +32,8 @@ struct EdgeSig {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RecordSig {
-    dim: u8,
-    action: u32,
+    dim: Dimension,
+    action: Action,
     point_ix: u16,
     edge_ix: u16,
     edge2_ix: u16,
@@ -96,12 +104,15 @@ fn round_bit(flags: u8) -> bool {
     (flags & TA_EDGE_ROUND) != 0
 }
 
-fn is_point_ip_action(action: u32) -> bool {
-    action == 2 || action == 3
+fn is_point_ip_action(action: Action) -> bool {
+    matches!(
+        action,
+        Action::Point(PointAction::IpOn) | Action::Point(PointAction::IpBetween)
+    )
 }
 
-fn is_on_between_swap(lhs: u32, rhs: u32) -> bool {
-    (lhs == 2 && rhs == 3) || (lhs == 3 && rhs == 2)
+fn is_on_between_swap(lhs: Action, rhs: Action) -> bool {
+    matches!((lhs, rhs), (Action::Point(p1), Action::Point(p2)) if (p1 == PointAction::IpOn && p2 == PointAction::IpBetween) || (p1 == PointAction::IpBetween && p2 == PointAction::IpOn))
 }
 
 fn remap_idx(idx: u16, map: &[u16]) -> u16 {
@@ -180,7 +191,7 @@ fn hint_plan_signature(plan: &ExportedHintPlan) -> HintPlanSignature {
         .iter()
         .map(|rec| RecordSig {
             dim: rec.dim,
-            action: rec.action as u32,
+            action: rec.action,
             point_ix: rec.point_ix,
             edge_ix: remap_idx(rec.edge_ix, &edge_map),
             edge2_ix: remap_idx(rec.edge2_ix, &edge_map),
@@ -297,7 +308,7 @@ fn hint_plan_divergence_details(base: &HintPlanSignature, other: &HintPlanSignat
     for (idx, (base_rec, other_rec)) in base.records.iter().zip(other.records.iter()).enumerate() {
         if base_rec.dim != other_rec.dim || base_rec.action != other_rec.action {
             details.push_str(&format!(
-                "\n  Record {} OPCODE mismatch: base action={} vs other action={}",
+                "\n  Record {} OPCODE mismatch: base action={:?} vs other action={:?}",
                 idx, base_rec.action, other_rec.action
             ));
             if base_rec.action != other_rec.action {
@@ -308,7 +319,7 @@ fn hint_plan_divergence_details(base: &HintPlanSignature, other: &HintPlanSignat
             }
         } else if base_rec != other_rec {
             details.push_str(&format!(
-                "\n  Record {} operand mismatch (action {}): base={{edge:{}, edge2:{}, lower:{}, upper:{}}} vs other={{edge:{}, edge2:{}, lower:{}, upper:{}}}",
+                "\n  Record {} operand mismatch (action {:?}): base={{edge:{}, edge2:{}, lower:{}, upper:{}}} vs other={{edge:{}, edge2:{}, lower:{}, upper:{}}}",
                 idx,
                 base_rec.action,
                 base_rec.edge_ix,
